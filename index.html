@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>고죠 본가 둘러보기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=Noto+Serif+JP:wght@500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* Layout: one full-bleed 3D view. A slim header across the top, and a single dock at the bottom that stacks
+   interaction prompts, the butler's story and the tour controls. Single dark look by design (a snowy night). */
+:root{
+  color-scheme:dark;
+  --ink:#f4f0e8; --ink-2:#cfc8bc; --ink-3:#9a9285;
+  --glass:rgba(17,20,26,.7); --glass-2:rgba(26,30,37,.86); --line:rgba(236,224,204,.14); --line-2:rgba(236,224,204,.24);
+  --warm:#e8c592; --warm-ink:#1e1810; --warm-soft:rgba(232,197,146,.16);
+  --f-display:"Noto Serif KR","Noto Serif JP",serif;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --gx:max(16px,env(safe-area-inset-left,0px)); --gr:max(16px,env(safe-area-inset-right,0px));
+  --top:calc(14px + env(safe-area-inset-top,0px)); --bot:calc(16px + env(safe-area-inset-bottom,0px));
+}
+html,body{height:100%}
+body{background:#0b0e13;color:var(--ink);font-family:var(--f-body);font-size:14px;overflow:hidden;word-break:keep-all;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--warm);outline-offset:2px}
+svg{display:block}
+#stage{position:fixed;inset:0;background:#0b0e13}
+#view{position:absolute;inset:0}
+#view .real-canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#view .real-canvas:active{cursor:grabbing}
+.hud{position:absolute;z-index:5}
+.panel{background:var(--glass);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.28)}
+
+/* header */
+#top{top:var(--top);left:var(--gx);right:var(--gr);display:flex;align-items:flex-start;justify-content:space-between;gap:10px;pointer-events:none}
+#top>*{pointer-events:auto}
+#place{padding:10px 15px 11px;max-width:min(380px,58vw);pointer-events:none}
+#place small{display:block;font-size:11px;letter-spacing:.16em;color:var(--warm);margin-bottom:3px}
+#place b{display:block;font-family:var(--f-display);font-weight:700;font-size:19px;letter-spacing:.01em;line-height:1.3}
+.tools{display:flex;gap:8px;align-items:center}
+#ctrl{display:flex;gap:8px}
+.seg{display:flex;gap:2px;padding:4px}
+.seg button{border:0;background:transparent;padding:7px 12px;border-radius:10px;font-size:13px;color:var(--ink-2);white-space:nowrap;transition:background .2s,color .2s}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--warm);color:var(--warm-ink);font-weight:600}
+.icon{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;color:var(--ink);padding:0}
+.icon:hover{border-color:var(--line-2)}
+#setBtn{display:none}
+
+/* minimap & help */
+#mini{right:var(--gr);bottom:var(--bot);padding:6px;cursor:pointer}
+#mini canvas{display:block;width:196px;height:150px;border-radius:9px}
+#help{left:var(--gx);bottom:var(--bot);padding:10px 13px;font-size:12px;color:var(--ink-2);line-height:1.75;max-width:230px;transition:opacity .8s;pointer-events:none}
+#help.hide{opacity:0}
+#help kbd{font-family:var(--f-body);font-size:10.5px;border:1px solid var(--line-2);border-radius:5px;padding:0 5px;color:var(--ink)}
+
+/* bottom dock */
+#dock{left:50%;transform:translateX(-50%);bottom:var(--bot);width:min(640px,calc(100% - 500px));min-width:min(440px,calc(100% - 32px));display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:none}
+#dock>*{pointer-events:auto}
+#prompts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+#prompts:empty{display:none}
+#prompts button{border:1px solid rgba(232,197,146,.45);background:var(--glass-2);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:999px;padding:7px 16px 7px 7px;display:flex;align-items:center;gap:10px;font-size:13.5px;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.3);animation:rise .3s ease}
+#prompts button:hover{border-color:var(--warm);background:rgba(60,48,32,.92)}
+#prompts kbd{font-family:var(--f-body);font-size:11px;font-weight:700;background:var(--warm);color:var(--warm-ink);border-radius:999px;min-width:24px;height:24px;display:grid;place-items:center;padding:0 7px}
+#story{position:relative;width:100%;box-sizing:border-box;padding:17px 46px 18px 22px;animation:rise .45s ease}
+#story.hide{display:none}
+#story .who{display:flex;align-items:baseline;gap:10px;margin-bottom:7px}
+#story .who small{font-size:11px;color:var(--warm);letter-spacing:.16em;flex:none}
+#story .who b{font-family:var(--f-display);font-size:17px;font-weight:700;line-height:1.35}
+#story p{margin:0;font-family:var(--f-display);font-size:15.5px;line-height:1.85;color:var(--ink);overflow-wrap:break-word;text-wrap:pretty}
+#story .x{position:absolute;right:8px;top:8px;border:0;background:transparent;color:var(--ink-3);width:34px;height:34px;border-radius:10px;display:grid;place-items:center}
+#story .x:hover{color:var(--ink);background:rgba(255,255,255,.06)}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* tour controls */
+#tour{position:relative;display:flex;align-items:center;gap:2px;padding:5px;border-radius:999px;overflow:hidden}
+#tour button{border:0;background:transparent;border-radius:999px;height:40px;padding:0 15px;font-size:13.5px;white-space:nowrap;color:var(--ink);display:flex;align-items:center;gap:8px}
+#tour button:hover{background:rgba(255,255,255,.06)}
+#tour button.main{background:var(--warm);color:var(--warm-ink);font-weight:700;padding:0 18px}
+#tour button.main:hover{background:#f0d0a2}
+#tour button.ghost{color:var(--ink-3);width:40px;padding:0;justify-content:center}
+#tour .prog{font-size:12px;color:var(--ink-3);padding:0 10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+#tour .track{position:absolute;left:18px;right:18px;bottom:3px;height:2px;border-radius:2px;background:rgba(255,255,255,.08)}
+#tour .track i{display:block;height:100%;border-radius:2px;background:var(--warm);transition:width .5s ease}
+
+/* lift */
+#lift{left:50%;top:50%;transform:translate(-50%,-50%);padding:20px;width:min(340px,calc(100% - 32px));box-sizing:border-box;display:flex;flex-direction:column;gap:8px;z-index:8;animation:rise .3s ease}
+#lift h2{margin:0 0 6px;font-family:var(--f-display);font-size:18px}
+#lift button.fl{border:1px solid var(--line);background:rgba(255,255,255,.04);border-radius:12px;padding:12px 14px;text-align:left;display:flex;flex-direction:column;gap:2px}
+#lift button.fl:hover{border-color:var(--warm);background:var(--warm-soft)}
+#lift button.fl b{font-size:15px}#lift button.fl span{font-size:12.5px;color:var(--ink-3)}
+#lift .cancel{border:0;background:transparent;color:var(--ink-3);padding:8px;align-self:center}
+
+/* map */
+#map{position:fixed;inset:0;z-index:20;background:rgba(6,8,12,.78);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:grid;place-items:center;padding:16px}
+#map .box{width:min(880px,100%);max-height:100%;display:flex;flex-direction:column;gap:12px;padding:18px;box-sizing:border-box}
+#map header{display:flex;align-items:center;gap:10px}
+#map header b{font-family:var(--f-display);font-size:18px}
+#map header button{margin-left:auto;width:38px;height:38px;border:1px solid var(--line);background:transparent;border-radius:12px;display:grid;place-items:center}
+#map .hint{font-size:12.5px;color:var(--ink-3);margin:-4px 0 0}
+#map .tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+#map .tabs button{flex:none;border:1px solid var(--line);background:rgba(255,255,255,.04);border-radius:999px;padding:8px 16px;font-size:13px}
+#map .tabs button[aria-pressed="true"]{border-color:var(--warm);background:var(--warm);color:var(--warm-ink);font-weight:600}
+#map canvas{width:100%;height:auto;max-height:66vh;object-fit:contain;border-radius:12px;background:#11151b;cursor:crosshair}
+
+/* settings sheet (phones) */
+#sheet{position:fixed;inset:0;z-index:22;background:rgba(6,8,12,.5);display:flex;align-items:flex-end}
+#sheet .box{width:100%;border-radius:22px 22px 0 0;padding:10px 20px calc(22px + env(safe-area-inset-bottom,0px));padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));box-sizing:border-box;display:flex;flex-direction:column;gap:16px;animation:up .3s ease}
+@keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+#sheet .grab{width:40px;height:4px;border-radius:4px;background:rgba(255,255,255,.22);align-self:center}
+#sheet h2{margin:0;font-family:var(--f-display);font-size:18px}
+#sheet .row{display:flex;flex-direction:column;gap:8px}
+#sheet .row>span{font-size:12px;letter-spacing:.12em;color:var(--ink-3)}
+#sheet .seg{padding:4px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
+#sheet .seg button{flex:1;padding:12px 6px;font-size:14px;border-radius:10px}
+#sheet .done{border:0;background:var(--warm);color:var(--warm-ink);font-weight:700;border-radius:14px;padding:14px;font-size:15px}
+
+/* joystick */
+#stick{left:max(18px,env(safe-area-inset-left,0px));bottom:calc(120px + env(safe-area-inset-bottom,0px));width:116px;height:116px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.12),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.22);touch-action:none;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#stick i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;background:rgba(244,240,232,.75);box-shadow:0 4px 14px rgba(0,0,0,.35)}
+
+#fade{position:fixed;inset:0;z-index:15;background:#07090c;opacity:0;pointer-events:none;transition:opacity .35s ease;display:grid;place-items:center;font-family:var(--f-display);color:var(--ink-3);font-size:14px;letter-spacing:.24em}
+#fade.on{opacity:1;pointer-events:auto}
+
+/* intro */
+#intro{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding-block:24px;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));background:radial-gradient(120% 90% at 50% 0%,#24324a 0%,#121821 55%,#0a0d12 100%);overflow:auto}
+#intro canvas{position:absolute;inset:0;width:100%;height:100%}
+#intro .card{position:relative;width:min(560px,100%);display:flex;flex-direction:column;gap:20px;text-align:center}
+#intro .kanji{font-family:var(--f-display);font-size:15px;letter-spacing:.6em;color:var(--warm);padding-left:.6em}
+#intro h1{margin:0;font-family:var(--f-display);font-size:clamp(42px,11vw,66px);font-weight:700;letter-spacing:.12em;line-height:1.1;padding-left:.12em}
+#intro .lead{margin:0 auto;font-family:var(--f-display);font-size:15.5px;line-height:1.95;color:var(--ink-2);max-width:40ch;text-wrap:pretty}
+#intro .opts{display:grid;gap:16px;margin-top:2px}
+#intro .opt{display:flex;flex-direction:column;align-items:center;gap:8px}
+#intro .opt>span{font-size:11.5px;letter-spacing:.18em;color:var(--ink-3)}
+#intro .choice{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+#intro .choice button{border:1px solid var(--line-2);background:rgba(255,255,255,.04);border-radius:999px;padding:9px 20px;font-size:14px;color:var(--ink-2);transition:all .2s}
+#intro .choice button[aria-pressed="true"]{border-color:var(--warm);color:var(--ink);background:var(--warm-soft)}
+#intro .choice button small{display:block;font-size:11px;color:var(--ink-3);margin-top:2px}
+#intro .starts{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:6px}
+#enter{border:0;background:var(--warm);color:var(--warm-ink);font-weight:700;font-size:16px;padding:15px 34px;border-radius:999px;letter-spacing:.04em;box-shadow:0 10px 30px rgba(232,197,146,.25);min-width:260px}
+#enter:disabled{opacity:.5;cursor:wait}
+#walkSelf{border:1px solid var(--line-2);background:rgba(255,255,255,.04);color:var(--ink);font-size:14.5px;padding:13px 30px;border-radius:999px;min-width:260px}
+#intro .note{font-size:12.5px;line-height:1.7;color:var(--ink-3);margin:0 auto;max-width:36ch}
+
+@media (max-width:1100px){#dock{width:min(640px,calc(100% - 270px))}}
+@media (max-width:760px){
+  :root{--gx:max(12px,env(safe-area-inset-left,0px));--gr:max(12px,env(safe-area-inset-right,0px));--top:calc(12px + env(safe-area-inset-top,0px));--bot:calc(12px + env(safe-area-inset-bottom,0px))}
+  #ctrl,#mini,#help{display:none}
+  #setBtn{display:grid}
+  #place{padding:9px 13px 10px;max-width:calc(100vw - 140px)}
+  #place small{font-size:10.5px}
+  #place b{font-size:16px}
+  #dock{left:var(--gx);right:var(--gr);transform:none;width:auto;min-width:0;gap:8px}
+  #story{padding:15px 42px 16px 18px;border-radius:18px}
+  #story .who b{font-size:16px}
+  #story p{font-size:14.5px;line-height:1.75}
+  #tour{width:100%;box-sizing:border-box;justify-content:space-between}
+  #tour.off{width:auto;align-self:center}
+  #tour button{height:44px}
+  #tour button.main{flex:1;justify-content:center}
+  #map{padding:0;place-items:end stretch}
+  #map .box{border-radius:22px 22px 0 0;max-height:92vh;padding:16px 16px calc(18px + env(safe-area-inset-bottom,0px))}
+  #map canvas{max-height:58vh}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+<style>[hidden]{display:none!important}body{margin:0}</style>
+</head>
+<body>
+
+
+<div id="stage">
+  <div id="view"></div>
+  <header class="hud" id="top">
+    <div class="panel" id="place"><small id="floor">본가 부지</small><b id="placeName">정문</b></div>
+    <div class="tools">
+      <div id="ctrl">
+        <div class="panel seg pv" role="group" aria-label="시간대"><button data-p="day">낮</button><button data-p="dusk">해질녘</button><button data-p="night">밤</button></div>
+        <div class="panel seg pv" role="group" aria-label="이야기 버전"><button data-v="m">명문가</button><button data-v="y">야쿠자 AU</button></div>
+      </div>
+      <button class="panel icon" id="mapBtn" aria-label="지도 열기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20z"/><path d="M9 4v13.5M15 6.5V20"/></svg></button>
+      <button class="panel icon" id="setBtn" aria-label="보기 설정"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+    </div>
+  </header>
+  <div class="hud panel" id="mini" title="지도 크게 보기 (M)"><canvas id="miniC" width="392" height="300"></canvas></div>
+  <div class="hud panel" id="help"><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> 또는 방향키로 걷고, 화면을 끌어 둘러보세요.<br><kbd>Shift</kbd> 빠르게 · <kbd>E</kbd> 들어가기·살펴보기 · <kbd>M</kbd> 지도 · <kbd>Space</kbd> 안내 멈춤</div>
+  <div class="hud" id="dock">
+    <div id="prompts"></div>
+    <section class="panel hide" id="story" aria-live="polite"><button class="x" id="storyX" aria-label="이야기 닫기"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><div class="who"><small>노집사</small><b id="storyT"></b></div><p id="storyP"></p></section>
+    <div class="panel" id="tour" hidden></div>
+  </div>
+  <div class="hud panel" id="lift" hidden></div>
+  <div class="hud" id="stick" hidden><i></i></div>
+</div>
+<div id="sheet" hidden><div class="panel box"><div class="grab"></div><h2>보기 설정</h2>
+  <div class="row"><span>시간대</span><div class="seg pv"><button data-p="day">낮</button><button data-p="dusk">해질녘</button><button data-p="night">밤</button></div></div>
+  <div class="row"><span>이야기 버전</span><div class="seg pv"><button data-v="m">명문가</button><button data-v="y">야쿠자 AU</button></div></div>
+  <button class="done" id="sheetX">닫기</button></div></div>
+<div id="map" hidden><div class="panel box"><header><b id="mapTitle"></b><button id="mapX" aria-label="지도 닫기"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header><p class="hint">층을 고르거나, 지도에서 가고 싶은 곳을 눌러 보세요.</p><div class="tabs" id="mapTabs"></div><canvas id="mapC" width="1600" height="1100"></canvas></div></div>
+<div id="fade"><span>걸어가는 중</span></div>
+
+<div id="intro">
+  <canvas id="introSnow"></canvas>
+  <div class="card">
+    <div class="kanji">五条家本邸</div>
+    <h1>고죠 본가</h1>
+    <p class="lead">설산 아래, 수백 년을 이어 온 가문의 저택. 바깥은 차갑고 엄숙하지만, 문 하나를 지나면 세 식구만의 따뜻한 집이 있습니다. 오늘은 오래 이 집을 지켜 온 집사가 안내해 드립니다.</p>
+    <div class="opts">
+      <div class="opt"><span>이야기 버전</span><div class="choice" id="iVer"><button data-v="m" aria-pressed="true">명문가<small>오래된 재벌 가문</small></button><button data-v="y" aria-pressed="false">야쿠자 AU<small>조직의 본가</small></button></div></div>
+      <div class="opt"><span>시간대</span><div class="choice" id="iTime"><button data-p="day" aria-pressed="false">낮</button><button data-p="dusk" aria-pressed="true">해질녘</button><button data-p="night" aria-pressed="false">밤</button></div></div>
+    </div>
+    <div class="starts"><button id="enter">자동 안내로 둘러보기</button><button id="walkSelf">직접 걸어 다니기</button></div>
+    <p class="note" id="introNote">자동 안내는 집사가 정문부터 집 안 곳곳을 걸으며 소개해요. 화면을 만지면 잠시 멈추고, 언제든 이어서 볼 수 있어요.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/SSAOShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/math/SimplexNoise.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/FXAAShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/SSAOPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="estate-data.js"></script>
+<script src="walk3d.js"></script>
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const E=window.ESTATE,W=window.Walk3D;
+let ver='m',preset='dusk',started=false,prompts=[],curLevel='site',storyTimer=0;
+try{const p=JSON.parse(localStorage.getItem('gojo-tour')||'{}');if(p.ver)ver=p.ver;if(p.preset)preset=p.preset}catch(e){}
+const save=()=>{try{localStorage.setItem('gojo-tour',JSON.stringify({ver,preset}))}catch(e){}};
+const txt=s=>ver==='y'&&s.y?s.y:s.m;
+const mobile=()=>innerWidth<=760;
+
+(function(){const c=$('#introSnow'),g=c.getContext('2d');let fl=[];const rs=()=>{c.width=innerWidth;c.height=innerHeight;fl=Array.from({length:140},()=>({x:Math.random()*c.width,y:Math.random()*c.height,r:.6+Math.random()*2,s:.3+Math.random()*.9}))};rs();addEventListener('resize',rs);
+  const still=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  (function tick(){if($('#intro').hidden)return;g.clearRect(0,0,c.width,c.height);g.fillStyle='rgba(235,242,250,.75)';fl.forEach(f=>{if(!still){f.y+=f.s;f.x+=Math.sin(f.y*.01)*.3;if(f.y>c.height){f.y=-4;f.x=Math.random()*c.width}}g.beginPath();g.arc(f.x,f.y,f.r,0,7);g.fill()});requestAnimationFrame(tick)})()})();
+function pressGroup(sel,attr,val){document.querySelectorAll(sel+' button').forEach(b=>{if(b.dataset[attr]!==undefined)b.setAttribute('aria-pressed',b.dataset[attr]===val)})}
+pressGroup('#iVer','v',ver);pressGroup('#iTime','p',preset);
+$('#iVer').onclick=e=>{const b=e.target.closest('button');if(!b)return;ver=b.dataset.v;pressGroup('#iVer','v',ver)};
+$('#iTime').onclick=e=>{const b=e.target.closest('button');if(!b)return;preset=b.dataset.p;pressGroup('#iTime','p',preset)};
+if(!W||!window.THREE){$('#enter').disabled=true;$('#introNote').textContent='3D 엔진을 불러오지 못했어요. 새로고침해 주세요.'}
+
+function begin(auto){
+  if(started||!W)return;started=true;save();$('#intro').hidden=true;
+  pressGroup('.pv','p',preset);pressGroup('.pv','v',ver);
+  W.init($('#view'),{onBusy,onLevel,onPlace,onStory,onPrompts,onFrame,onManual,onError:e=>showStory('잠시만요','장면을 짓다가 문제가 생겼어요. 새로고침하면 처음부터 다시 둘러볼 수 있어요.')});
+  W.start(E.start.level,E.start.sp,{version:ver,preset});
+  if(matchMedia('(pointer:coarse)').matches)$('#stick').hidden=false;
+  setTimeout(()=>$('#help').classList.add('hide'),auto?3000:16000);
+  renderTour();if(auto)waitIdle(()=>tourStart(),400);
+}
+$('#enter').onclick=()=>begin(true);$('#walkSelf').onclick=()=>begin(false);
+
+/* ── auto tour ── */
+const TOUR=[
+ {lv:'site',path:[[120,244]],look:[120,200,3],say:{zone:'z-gate'}},
+ {path:[[120,222],[120,200]],look:[120,140,6],say:{zone:'z-road'}},
+ {path:[[120,170],[120,150]],look:[120,140,5],say:{zone:'z-front'}},
+ {path:[[120,142.6]]},
+ {go:['1F',{x:28,y:38.4,yaw:0}]},
+ {path:[[28,36.6]],look:[28,26,2.2],say:{room:'f1-7'}},
+ {path:[[27.2,34.2]],look:[24.3,31,1.2],say:{hot:'ikebana'}},
+ {path:[[24.4,35.2],[21.6,35.2]],look:[18.5,35.2,.8],say:{room:'f1-6'}},
+ {path:[[21.4,32.4],[20.4,30.9],[18.5,30.5],[18.5,28.6],[15,28.2],[12,28.6],[12,31.8]],look:[7,30.3,1.6],say:{room:'f1-5'}},
+ {say:{hot:'scroll|katana'}},
+ {path:[[12,28.4],[12,20],[11.2,17.2],[8.6,17]],look:[5,17,1],say:{room:'f1-2'}},
+ {path:[[11.4,17.4],[12,20],[12.2,26.6],[15,28.2],[24,28.2],[30,28.2]],look:[42,28,1.5],say:{room:'f1-12'}},
+ {path:[[36,28.2],[40.4,28.1]],look:[43,28,1.6],say:{door:1}},
+ {path:[[42.8,28],[44.8,27],[47.2,26],[50,25.4]],look:[55.3,20.6,.5],say:{room:'f1-17'}},
+ {say:{hot:'shoes'}},
+ {path:[[47.2,26],[45.2,24.2],[45,21.6],[45.4,18.5],[45.6,16.6]],look:[47.95,16.5,1.6],say:{room:'f1-15'}},
+ {say:{hot:'frames'}},
+ {path:[[45.2,12],[45,9],[46.2,6.2],[47.4,5]],look:[54.4,7.4,1],say:{room:'f1-14'}},
+ {say:{hot:'towelbench'}},
+ {path:[[45.6,6.6],[45,9.4],[45,21.6],[44.8,24],[43.2,27.4],[41.6,28.1],[37,28.2],[35.2,29],[35,31.2],[34.4,34],[34.3,35.4]],look:[34.3,38.8,1.4],say:{text:{t:'손님 승강기',m:'1층은 여기까지입니다. 이제 손님 승강기로 3층에 올라가 보시지요. 이 승강기는 1층과 3층에만 서고, 2층 가족 공간에는 문이 나 있지 않습니다.'}}},
+ {go:['3F',{lift:'guest'}]},
+ {path:[[34.6,33.6],[35,31.2],[34,28.8],[30,28.6],[28.2,30.2],[28,31.6]],look:[28.5,36,.8],say:{room:'f3-5'}},
+ {path:[[28,29.6],[26,28.4],[12,28.4],[8,28.2],[7,26.8],[7,24.6],[7,21]],look:[7,5,3],say:{room:'f3-1'}},
+ {say:{text:{t:'가족의 층으로',m:'손님의 층에서 가족의 층으로 내려가는 길은 없습니다. 일부러 그렇게 지었지요. 가족 승강기로 갈아타 2층으로 모시겠습니다.'}}},
+ {go:['2F',{lift:'family'}]},
+ {path:[[45.4,24.4],[45,21.6],[44.3,18.4],[44.2,8],[45.4,5.6],[47.3,6.2],[47.3,9]],look:[55,5.5,1],say:{room:'f2-20'}},
+ {look:[54.8,10.5,3.1],say:{hot:'perch'}},
+ {look:[54.6,5.5,.4],say:{hot:'fireguard'}},
+ {look:[49.6,5.6,.6],say:{hot:'sofa_l'}},
+ {path:[[46.8,6.4],[44.6,7.4],[44.4,11.6],[45.6,13],[47.3,13]],look:[51,13.3,.8],say:{room:'f2-21'}},
+ {say:{hot:'highchair'}},
+ {path:[[45.6,13.6],[44.4,15.6],[45.4,18.4],[47.3,18.6]],look:[52,19,1.4],say:{room:'f2-22'}},
+ {say:{hot:'softplay'}},
+ {path:[[45.6,18.8],[44.6,20.6],[45,22.4],[44.6,25],[43.2,27.6],[41,28.1],[38,28]],look:[20,28,1.2],say:{room:'f2-16'}},
+ {path:[[22,28.1],[18.6,28.6],[18,30.4],[18.6,33]],look:[14,38,.6],say:{room:'f2-7'}},
+ {look:[15.6,38.2,.3],say:{hot:'catbed'}},
+ {look:[12.6,30.5,2.8],say:{hot:'perch'}},
+ {look:[12.4,38.3,.8],say:{hot:'crib'}},
+ {look:[20.5,38.4,.8],say:{hot:'nurse'}},
+ {path:[[18.2,31.2],[18.6,28.6],[22,28.2],[28.4,28.4],[29.5,30.2],[29.5,31.4]],look:[28.2,37.6,.8],say:{room:'f2-10'}},
+ {say:{hot:'tent'}},
+ {path:[[29.4,29.6],[27,28.3],[24.6,28.6],[24,30.2],[24,31.3],[24,33.4]],look:[24,38,.8],say:{room:'f2-9'}},
+ {look:[25.2,35,.5],say:{hot:'boxes'}},
+ {path:[[24,31.3],[24,29.6],[22,28.4],[14,28.3],[12.2,27.4],[11,26.1],[9,26],[6.6,26.6],[5.2,28.4],[5,30.2],[5,31.3]],look:[5,37,.8],say:{room:'f2-6'}},
+ {look:[5.4,36.5,.6],say:{hot:'plush'}},
+ {path:[[5,29.6],[6,27],[9,26],[11.4,25.4],[12,22],[11.6,19.4],[8.8,19.6]],look:[5.5,17.5,.9],say:{room:'f2-3'}},
+ {look:[6.25,17.25,.9],say:{hot:'candy'}},
+ {look:[2,21.6,2.5],say:{hot:'perch'}},
+ {path:[[11.2,19.2],[12,16.4],[11.4,13.8],[8.8,13.9]],look:[3,13.8,1.2],say:{room:'f2-2'}},
+ {look:[6.6,11.25,1.5],say:{hot:'bookshelf'}},
+ {look:[9.95,15.4,1.6],say:{hot:'poster'}},
+ {path:[[11.2,13.6],[12,9.6],[11.2,5.6],[8.6,5.8]],look:[5,1,1.4],say:{room:'f2-1'}},
+ {look:[3.6,3.5,.6],say:{hot:'armchair'}},
+ {say:{text:{t:'아래층으로',m:'이제 아래층으로 내려가 보시지요. 가족이 쉬고, 놀고, 영화를 보는 곳입니다.'}}},
+ {jump:[46.7,26.7,0]},
+ {go:['B1',{lift:'family'}]},
+ {path:[[45.4,24.4],[45,21.6],[43.6,20.2],[38,20],[35.4,21],[35,23.6]],look:[36.5,29.5,2.4],say:{room:'b1-9'}},
+ {look:[33.4,26,.3],say:{hot:'rock'}},
+ {path:[[35,21.6],[32,20],[29,19.6],[28,18],[28,16.6]],look:[28,6,.5],say:{room:'b1-6'}},
+ {look:[24,7.5,0],say:{hot:'float'}},
+ {path:[[28,18.4],[26,20],[15,20],[12.6,19.2],[11.4,18],[8.6,18]],look:[5,12.6,1.4],say:{room:'b1-2'}},
+ {say:{hot:'cinemascreen'}},
+ {look:[5,20.2,.6],say:{hot:'recliner'}},
+ {path:[[11.4,18],[12.8,19.6],[16,20],[40,20],[44,19],[45,15],[45,11.2],[45.6,9],[48,7.8],[49.6,7.4]],look:[46.7,4.6,.4],say:{room:'b1-11'}},
+ {path:[[49.2,4],[49,1.4],[49,-1]]},
+ {go:['site',{x:150,y:80.4,yaw:-Math.PI*0.8}]},
+ {look:[161,71,.4],say:{zone:'z-onsen'}},
+ {say:{hot:'rock'}},
+ {path:[[147,82.4],[143.6,84.6],[141,84.8]],look:[138.5,80,1],say:{zone:'z-garden'}},
+ {say:{hot:'snowman'}},
+ {look:[143.5,83.5,.2],say:{hot:'sled'}},
+ {look:[141,30,12],say:{text:{t:'안내를 마치며',m:'오늘 안내는 여기까지입니다. 그래도 이 집에는 아직 보여 드리지 못한 곳이 많지요. 지하 2층에는 가보를 모신 수장고와 사백 년 치 기록이 있고, 지하 1층에는 와인 저장고와 도련님의 실내 놀이터가 있습니다. 바깥으로 나가시면 서쪽 별채로 이어지는 전통 회랑과 연못이 있는 옛 정원도 있고요. 더 궁금한 곳이 있으시면 이제 직접 걸어 보십시오. 길을 잃으시면 지도를 펼치시면 됩니다. 저는 2층 벽난로 곁에서 차를 준비해 두겠습니다.',y:'안내는 여기까지입니다. 남은 곳은 직접 보시지요. 지하 2층의 보안 통제실과 금고, 조직의 장부가 잠든 기록 보관실까지 오늘은 모두 열어 두었습니다. 바깥의 전통 회랑을 따라가시면 어른들이 모이는 의례 별채도 보실 수 있지요. 어느 문도 오늘만큼은 손님을 막지 않을 겁니다. 길을 잃으시면 지도를 펼치십시오. 다만 2층에서는 목소리를 조금 낮춰 주십시오. 작은 도련님이 낮잠 주무실 시간이거든요.'}}}
+];
+
+const tour={on:false,i:0,paused:false,waiting:false,timer:0,at:null};
+function waitIdle(cb,extra){const iv=setInterval(()=>{if(!W.isBusy()){clearInterval(iv);setTimeout(cb,extra||250)}},120)}
+function findSay(q){if(!q)return null;if(q.text)return q.text;
+  if(q.door)return E.levels['1F'].doors.find(d=>d.k==='story').say;
+  if(q.hot){const h=W.findHot(q.hot);return h?h.say:null}
+  const id=q.room||q.zone;for(const L of Object.values(E.levels)){const r=L.rooms.find(x=>x.id===id)||(L.zones||[]).find(x=>x.id===id);if(r)return r.say}return null}
+const readTime=t=>Math.max(6500,Math.min(17000,t.length*82));
+function tourStart(){tour.on=true;tour.i=0;tour.paused=false;tour.waiting=false;$('#help').classList.add('hide');
+  const st=W.state();if(st.level!=='site'||Math.hypot(st.x-120,st.y-249.5)>2){W.go('site',E.start.sp);waitIdle(runStep)}else runStep();renderTour()}
+function runStep(){
+  if(!tour.on||tour.paused)return;const st=TOUR[tour.i];renderTour();
+  if(!st){tourEnd(true);return}
+  if(st.go){hideStory();W.go(st.go[0],st.go[1]);waitIdle(()=>{tour.i++;runStep()});return}
+  if(st.jump){W.go(W.state().level,{x:st.jump[0],y:st.jump[1],yaw:st.jump[2]||0});waitIdle(()=>{tour.i++;runStep()});return}
+  W.autoWalk(st.path||[],st.look,()=>{const say=findSay(st.say);
+    if(say){const t=txt(say);showStory(say.t,t);tour.waiting=true;tour.timer=setTimeout(advance,readTime(t))}else advance()});
+}
+function advance(){clearTimeout(tour.timer);tour.waiting=false;tour.i++;runStep()}
+function tourPause(){if(!tour.on||tour.paused)return;tour.paused=true;clearTimeout(tour.timer);W.cancelAuto();const s=W.state();tour.at={level:s.level,x:s.x,y:s.y,yaw:s.yaw};renderTour()}
+function tourResume(){if(!tour.on)return;tour.paused=false;if(tour.waiting){advance();return}
+  const s=W.state(),a=tour.at;if(a&&(s.level!==a.level||Math.hypot(s.x-a.x,s.y-a.y)>1.5)){W.go(a.level,{x:a.x,y:a.y,yaw:a.yaw});waitIdle(runStep)}else runStep();renderTour()}
+function tourNext(){if(!tour.on)return;if(tour.paused){tour.paused=false;if(!tour.waiting){const st=TOUR[tour.i];if(st&&!st.go&&!st.jump){const a=tour.at;const s=W.state();if(a&&(s.level!==a.level||Math.hypot(s.x-a.x,s.y-a.y)>1.5)){W.go(a.level,{x:a.x,y:a.y,yaw:a.yaw});waitIdle(()=>{runStep();setTimeout(()=>W.finishAuto(),50)});renderTour();return}}runStep();setTimeout(()=>W.finishAuto(),50);renderTour();return}advance();return}
+  if(W.isAuto())W.finishAuto();else if(tour.waiting)advance()}
+function tourEnd(done){tour.on=false;tour.paused=false;clearTimeout(tour.timer);W.cancelAuto();renderTour();if(done===true)setTimeout(()=>{const b=$('#mapBtn');b.animate([{boxShadow:'0 0 0 0 rgba(232,197,146,.7)'},{boxShadow:'0 0 0 12px rgba(232,197,146,0)'}],{duration:1400,iterations:3})},800)}
+function onManual(){if(tour.on)tourPause()}
+const IC={play:'<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>',pause:'<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4" height="15" rx="1"/><rect x="14" y="4.5" width="4" height="15" rx="1"/></svg>',next:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',stop:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>'};
+function renderTour(){const el=$('#tour');if(!started){el.hidden=true;return}el.hidden=false;const coarse=matchMedia('(pointer:coarse)').matches;if(coarse)$('#stick').hidden=tour.on&&!tour.paused;
+  if(!tour.on){el.className='panel off';el.innerHTML=`<button class="main" id="tStart">${IC.play}자동 안내 시작</button>`;$('#tStart').onclick=tourStart;layoutPrompts();return}
+  el.className='panel';const n=TOUR.filter(t=>t.say).length,k=Math.min(n,TOUR.slice(0,tour.i+1).filter(t=>t.say).length);
+  el.innerHTML=(tour.paused?`<button class="main" id="tRes">${IC.play}이어서</button>`:`<button class="main" id="tPause">${IC.pause}멈춤</button>`)+`<button id="tNext">다음${IC.next}</button><span class="prog">${k} / ${n}</span><button class="ghost" id="tEnd" aria-label="안내 끝내기">${IC.stop}</button><span class="track"><i style="width:${(k/n*100).toFixed(1)}%"></i></span>`;
+  if($('#tRes'))$('#tRes').onclick=tourResume;if($('#tPause'))$('#tPause').onclick=tourPause;$('#tNext').onclick=tourNext;$('#tEnd').onclick=tourEnd;layoutPrompts()}
+
+function onBusy(b){$('#fade').classList.toggle('on',b)}
+function onLevel(L){curLevel=L.id;$('#floor').textContent=E.FLOOR_LABEL[L.id]||L.name;drawMini(true);$('#lift').hidden=true}
+function onPlace(L,p){$('#placeName').textContent=p?p.n:(L.id==='site'?'눈 덮인 마당':'—')}
+function onStory(say){if(tour.on)return;showStory(say.t,txt(say))}
+function showStory(t,p){const st=$('#story');$('#storyT').textContent=t;$('#storyP').textContent=p;st.classList.remove('hide');layoutPrompts();clearTimeout(storyTimer);storyTimer=setTimeout(hideStory,Math.max(10000,p.length*100))}
+function hideStory(){$('#story').classList.add('hide');layoutPrompts()}
+$('#storyX').onclick=hideStory;
+function layoutPrompts(){const st=$('#stick');if(st.hidden)return;const h=$('#dock').getBoundingClientRect().height;st.style.bottom=`calc(${Math.round(h)+26}px + env(safe-area-inset-bottom,0px))`}
+addEventListener('resize',layoutPrompts);
+function onPrompts(list){prompts=list;const el=$('#prompts');el.innerHTML='';list.slice(0,3).forEach((p,i)=>{const b=document.createElement('button');b.innerHTML=`<kbd>${i===0?'E':i+1}</kbd><span></span>`;b.querySelector('span').textContent=p.label;b.onclick=()=>act(p);el.appendChild(b)});layoutPrompts()}
+function act(p){if(!p)return;if(tour.on&&p.type!=='hot')tourPause();
+  if(p.type==='portal'){hideStory();W.go(p.to,p.sp)}
+  else if(p.type==='hot'){showStory(p.say.t,txt(p.say))}
+  else if(p.type==='lift'){const el=$('#lift');el.innerHTML='<h2>어느 층으로 갈까요?</h2>'+p.floors.map(f=>`<button class="fl" data-f="${f}"><b>${E.levels[f].name}</b><span>${E.FLOOR_LABEL[f]}</span></button>`).join('')+'<button class="cancel">닫기</button>';el.hidden=false;
+    el.querySelectorAll('.fl').forEach(b=>b.onclick=()=>{el.hidden=true;hideStory();W.go(b.dataset.f,{lift:p.owner})});el.querySelector('.cancel').onclick=()=>el.hidden=true}}
+addEventListener('keydown',e=>{if(!started||/INPUT|TEXTAREA/.test(document.activeElement.tagName))return;
+  if(e.code==='Space'&&tour.on){tour.paused?tourResume():tourPause();e.preventDefault();return}
+  if(e.code==='KeyE'||e.code==='Enter'){act(prompts[0]);e.preventDefault()}
+  else if(e.code==='Digit2')act(prompts[1]);else if(e.code==='Digit3')act(prompts[2]);
+  else if(e.code==='Escape'){if(!$('#map').hidden)$('#map').hidden=true;else if(!$('#lift').hidden)$('#lift').hidden=true;else hideStory()}
+  else if(e.code==='KeyM'){if($('#map').hidden)openMap();else $('#map').hidden=true}
+  if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))setTimeout(()=>$('#help').classList.add('hide'),4000)});
+
+const onCtrl=e=>{const b=e.target.closest('button');if(!b||!started)return;
+  if(b.dataset.p){preset=b.dataset.p;pressGroup('.pv','p',preset);W.setPreset(preset);save()}
+  if(b.dataset.v&&b.dataset.v!==ver){ver=b.dataset.v;pressGroup('.pv','v',ver);W.setVersion(ver);$('#sheet').hidden=true;save();
+    setTimeout(()=>showStory(ver==='y'?'야쿠자 AU':'명문가',ver==='y'?'같은 집, 다른 이야기입니다. 바깥과 1층, 지하의 이야기가 달라지지요. 2층 가족의 공간만은 어느 쪽이든 같습니다.':'같은 집, 다른 이야기입니다. 오래된 재벌 가문의 본가로 다시 안내해 드리겠습니다.'),500)}};
+
+const ZC={family:'#c9a77f',guest:'#7d858f',staff:'#748c7f',security:'#7f7898',core:'#545861',water:'#3d7f9e',outdoor:'#55665a',trad:'#8a7158',road:'#4a4844'};
+function mapFrame(L,c){const [bx,by,bw,bh]=L.id==='site'?[0,36,240,216]:L.bounds;const k=Math.min((c.width-24)/bw,(c.height-24)/bh);return {k,x:bx-(c.width/k-bw)/2,y:by-(c.height/k-bh)/2}}
+function drawLevel(c,big){const g=c.getContext('2d'),L=E.levels[curLevel],st=W.state();if(!L)return;const F=mapFrame(L,c),k=F.k,X=x=>(x-F.x)*k,Y=y=>(y-F.y)*k;
+  g.fillStyle='#11151b';g.fillRect(0,0,c.width,c.height);
+  if(L.id==='site'){g.fillStyle='#1f2731';g.fillRect(X(6),Y(40),228*k,198*k)}
+  L.rooms.forEach(r=>{if(r.z==='void'||r.z==='mountain'||r.id==='s-ct')return;g.fillStyle=ZC[r.z]||'#666';g.globalAlpha=r.hall?.55:.92;g.fillRect(X(r.x),Y(r.y),r.w*k,r.h*k)});g.globalAlpha=1;
+  if(L.id!=='site'){g.strokeStyle='rgba(243,239,231,.9)';g.lineWidth=big?2.4:1.5;E.wallSegs(L).forEach(s=>{g.beginPath();g.moveTo(X(s.x1),Y(s.y1));g.lineTo(X(s.x2),Y(s.y2));g.stroke()})}
+  else{g.strokeStyle='rgba(243,239,231,.55)';g.lineWidth=big?3:1.5;L.estateWall.forEach(([a,b,cc,d])=>{g.beginPath();g.moveTo(X(a),Y(b));g.lineTo(X(cc),Y(d));g.stroke()})}
+  if(big){g.textAlign='center';g.textBaseline='middle';
+    const items=L.id==='site'?L.rooms.filter(r=>r.b||r.walk).concat((L.zones||[]).filter(z=>['z-garden','z-tg','z-gate','z-front','z-onsen'].includes(z.id))):L.rooms.filter(r=>r.z!=='void'&&r.z!=='core'&&!r.hall&&r.w*k>58&&r.h*k>24&&!(r.z==='water'&&r.open));
+    const sc=Math.max(1,c.width/Math.max(1,c.getBoundingClientRect().width)*.55);items.forEach(r=>{const name=r.n.replace(/ \(.*\)/,'');const fs=Math.max(12*sc,Math.min(24*sc,r.w*k/(name.length*1.0)));g.font=`600 ${fs}px "IBM Plex Sans KR",sans-serif`;g.fillStyle=r.z==='x'?'rgba(231,196,145,.95)':'#f6f2ea';g.fillText(name,X(r.x+r.w/2),Y(r.y+r.h/2))})}
+  const px=X(st.x),py=Y(st.y);g.fillStyle='rgba(231,196,145,.3)';g.beginPath();g.moveTo(px,py);g.arc(px,py,big?52:30,st.yaw-Math.PI/2-.55,st.yaw-Math.PI/2+.55);g.closePath();g.fill();
+  g.fillStyle='#e7c491';g.beginPath();g.arc(px,py,big?Math.max(9,c.width/Math.max(1,c.getBoundingClientRect().width)*5):6,0,7);g.fill();g.strokeStyle='#1d1710';g.lineWidth=2;g.stroke()}
+let mf=0;function drawMini(force){if(!force&&(++mf%8))return;drawLevel($('#miniC'),false)}
+function onFrame(){drawMini(false);if(!$('#map').hidden&&mf%8===0)drawLevel($('#mapC'),true)}
+const TABS=[['site','부지'],['B2','B2'],['B1','B1'],['1F','1F'],['2F','2F'],['3F','3F']];
+const TABSP={site:{x:120,y:145,yaw:Math.PI},B2:{lift:'family'},B1:{lift:'family'},'1F':{x:28,y:38.4,yaw:0},'2F':{lift:'family'},'3F':{lift:'guest'}};
+function openMap(){$('#mapTitle').textContent=E.FLOOR_LABEL[curLevel];$('#map').hidden=false;
+  $('#mapTabs').innerHTML=TABS.map(([id,n])=>`<button data-l="${id}" aria-pressed="${id===curLevel}">${n}</button>`).join('');
+  $('#mapTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{const id=b.dataset.l;$('#map').hidden=true;if(tour.on)tourPause();if(id!==curLevel)W.go(id,TABSP[id])});
+  drawLevel($('#mapC'),true)}
+document.querySelectorAll('.pv').forEach(el=>el.addEventListener('click',onCtrl));
+$('#mini').onclick=openMap;$('#mapBtn').onclick=()=>{if(started)openMap()};$('#setBtn').onclick=()=>{$('#sheet').hidden=false};$('#sheetX').onclick=()=>$('#sheet').hidden=true;$('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')$('#sheet').hidden=true});$('#mapX').onclick=()=>$('#map').hidden=true;
+$('#map').addEventListener('click',e=>{if(e.target.id==='map')$('#map').hidden=true});
+$('#mapC').onclick=e=>{const c=$('#mapC'),b=c.getBoundingClientRect(),L=E.levels[curLevel],F=mapFrame(L,c);
+  const sc=Math.min(b.width/c.width,b.height/c.height),ox=(b.width-c.width*sc)/2,oy=(b.height-c.height*sc)/2;
+  const x=F.x+((e.clientX-b.left-ox)/sc)/F.k,y=F.y+((e.clientY-b.top-oy)/sc)/F.k;
+  const r=L.id==='site'?null:L.rooms.find(q=>x>=q.x&&x<=q.x+q.w&&y>=q.y&&y<=q.y+q.h&&q.z!=='void');
+  let ok=W.teleport(x,y);if(!ok){const box=r||{x:x-6,y:y-6,w:12,h:12};for(let i=0;i<60&&!ok;i++)ok=W.teleport(box.x+.6+Math.random()*(box.w-1.2),box.y+.6+Math.random()*(box.h-1.2))}
+  if(ok){$('#map').hidden=true;if(tour.on)tourPause()}else{$('#mapTitle').textContent='그곳으로는 갈 수 없어요';setTimeout(()=>$('#mapTitle').textContent=E.FLOOR_LABEL[curLevel],1600)}};
+
+(function(){const st=$('#stick'),kn=st.querySelector('i');let id=null;
+  const mv=e=>{const r=st.getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,lim=r.width*.32,m=Math.hypot(dx,dy),k=Math.min(1,lim/(m||1));W.setJoy(dx*k/lim,dy*k/lim);kn.style.transform=`translate(${dx*k}px,${dy*k}px)`};
+  st.addEventListener('pointerdown',e=>{id=e.pointerId;st.setPointerCapture(id);mv(e)});st.addEventListener('pointermove',e=>{if(e.pointerId===id)mv(e)});
+  const rs=()=>{id=null;W.setJoy(0,0);kn.style.transform=''};st.addEventListener('pointerup',rs);st.addEventListener('pointercancel',rs)})();
+})();
+</script>
+
+</body>
+</html>
